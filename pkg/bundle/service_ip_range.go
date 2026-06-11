@@ -2,7 +2,9 @@ package bundle
 
 import (
 	"fmt"
+	"net"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -12,6 +14,15 @@ import (
 )
 
 const apiServerContainerName = "kube-apiserver"
+
+// kairosClusterConfigPath is the host-level Spectro edge cluster config that
+// records the service CIDR when kube-apiserver runs as a host service (e.g.
+// Canonical Kubernetes) rather than a static pod.
+const kairosClusterConfigPath = "usr/local/cloud-config/cluster.kairos.yaml"
+
+// serviceCIDRConfigRegexp matches a `service-cidr: <cidr>` entry (quoted or
+// unquoted) in the host cluster config.
+var serviceCIDRConfigRegexp = regexp.MustCompile(`(?m)^\s*service-cidr:\s*"?([0-9.]+/[0-9]+)"?`)
 
 // DetectServiceSubnetRange attempts to determine service ip range value provided
 // to k8s api server, so that local version can be launched with same argument.
@@ -25,13 +36,43 @@ func DetectServiceSubnetRange(b Bundle) (string, error) {
 		return "", err
 	}
 
-	// Some bundles collected from managed providers, like gke, eks would not have
-	// the kube-apiserver pod.
-	if apiServerPod == nil {
+	// Some bundles (managed providers like gke/eks, or Spectro edge where the
+	// apiserver runs as a host service) do not have a kube-apiserver pod.
+	if apiServerPod != nil {
+		if ipRange, err := parseIPRangeArg(apiServerPod); err == nil && ipRange != "" {
+			return ipRange, nil
+		}
+	}
+
+	// Fallback: read the service CIDR from the host-level cluster config.
+	return detectServiceSubnetFromHostConfig(b)
+}
+
+// detectServiceSubnetFromHostConfig is a best-effort fallback that reads the
+// service CIDR from the Spectro edge host cluster config (cluster.kairos.yaml).
+// Returns "" when the file is absent or has no parseable service-cidr.
+func detectServiceSubnetFromHostConfig(b Bundle) (string, error) {
+	exists, err := afero.Exists(b, kairosClusterConfigPath)
+	if err != nil || !exists {
 		return "", nil
 	}
 
-	return parseIPRangeArg(apiServerPod)
+	data, err := afero.ReadFile(b, kairosClusterConfigPath)
+	if err != nil {
+		return "", nil
+	}
+
+	m := serviceCIDRConfigRegexp.FindSubmatch(data)
+	if m == nil {
+		return "", nil
+	}
+
+	cidr := string(m[1])
+	if _, _, err := net.ParseCIDR(cidr); err != nil {
+		return "", nil
+	}
+
+	return cidr, nil
 }
 
 // DetectServiceNodePortRange attempts to determine service node port range value provided
