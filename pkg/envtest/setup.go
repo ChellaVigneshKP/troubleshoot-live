@@ -20,12 +20,23 @@ import (
 // Prepare creates k8s environment for the provided bundle by detecting the
 // k8s version and downloading necessary envtest assets for launching the
 // detected k8s version.
-func Prepare(ctx context.Context, b bundle.Bundle, opts ...Option) (*Environment, error) {
-	detectedK8sVersion, err := DetectK8sVersion(b)
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect k8s version: %s", err)
+func Prepare(ctx context.Context, b bundle.Bundle, versionOverride string, opts ...Option) (*Environment, error) {
+	var detectedK8sVersion versions.Selector
+	if versionOverride != "" {
+		sel, err := ParseVersionSelector(versionOverride)
+		if err != nil {
+			return nil, err
+		}
+		detectedK8sVersion = sel
+		log.Printf("Using overridden %q k8s version", versionOverride)
+	} else {
+		sel, err := DetectK8sVersion(b)
+		if err != nil {
+			return nil, fmt.Errorf("failed to detect k8s version: %w (use --kubernetes-version to set it manually)", err)
+		}
+		detectedK8sVersion = sel
+		log.Printf("Detected %q k8s version", detectedK8sVersion)
 	}
-	log.Printf("Detected %q k8s version", detectedK8sVersion)
 
 	versionSpec := versions.Spec{
 		Selector: detectedK8sVersion,

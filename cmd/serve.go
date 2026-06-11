@@ -29,6 +29,7 @@ type serveOptions struct {
 	envtestArch           string
 	serviceClusterIPRange string
 	serviceNodePortRange  string
+	kubernetesVersion     string
 }
 
 const internalProxyHTTPPrefix = "/bundles/default"
@@ -75,6 +76,11 @@ func NewServeCommand(out output.Output) *cobra.Command {
 	cmd.Flags().StringVar(
 		&options.serviceNodePortRange, "service-node-port-range", options.serviceNodePortRange,
 		"override k8s api server service node port range",
+	)
+
+	cmd.Flags().StringVar(
+		&options.kubernetesVersion, "kubernetes-version", options.kubernetesVersion,
+		"override the Kubernetes version (e.g. 1.31). Auto-detected from the bundle when empty.",
 	)
 
 	return cmd
@@ -159,7 +165,7 @@ func startK8sServer(
 	out output.Output,
 	opts *serveOptions,
 ) (*envtest.Environment, envtest.StorageBackend, error) {
-	testEnv, err := envtest.Prepare(ctx, supportBundle, envtest.Arch(opts.envtestArch))
+	testEnv, err := envtest.Prepare(ctx, supportBundle, opts.kubernetesVersion, envtest.Arch(opts.envtestArch))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare k8s environment: %w", err)
 	}
