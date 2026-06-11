@@ -30,7 +30,6 @@ func LogsHandler(b bundle.Bundle, l *slog.Logger) http.HandlerFunc {
 		container := r.URL.Query().Get("container")
 		previous := r.URL.Query().Get("previous") == "true"
 
-		filename := fmt.Sprintf("%s-%s.log", pod, container)
 		candidatePaths := []string{}
 
 		if previous {
@@ -43,6 +42,7 @@ func LogsHandler(b bundle.Bundle, l *slog.Logger) http.HandlerFunc {
 			)
 		} else {
 			// Native troubleshoot.sh paths.
+			filename := fmt.Sprintf("%s-%s.log", pod, container)
 			candidatePaths = append(candidatePaths,
 				filepath.Join(b.Layout().PodLogs(), namespace, filename),
 				filepath.Join(b.Layout().ClusterResources(), "pods/logs", namespace, pod, container+".log"),

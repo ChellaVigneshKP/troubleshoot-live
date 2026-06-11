@@ -100,6 +100,11 @@ func importNamespaces(
 		Kind:    "Namespace",
 	})
 
+	if len(list.Items) == 0 {
+		cfg.out.Warnf("no namespaces found in %q", namespacesPath)
+		return nil
+	}
+
 	namespaces := []string{}
 	gvr, includeStatus, err := detectGVR(cfg.discoveryClient, &list.Items[0])
 	if err != nil {

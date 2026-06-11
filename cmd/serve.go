@@ -80,7 +80,7 @@ func NewServeCommand(out output.Output) *cobra.Command {
 
 	cmd.Flags().StringVar(
 		&options.kubernetesVersion, "kubernetes-version", options.kubernetesVersion,
-		"override the Kubernetes version (e.g. 1.31). Auto-detected from the bundle when empty.",
+		"override the Kubernetes version (e.g. \"1.31\" or \"v1.31.2\"). Auto-detected from the bundle when empty.",
 	)
 
 	return cmd

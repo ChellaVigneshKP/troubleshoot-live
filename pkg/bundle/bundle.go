@@ -15,7 +15,7 @@ import (
 )
 
 // ErrUnknownBundleFormat is returned when bundle cannot be loaded.
-var ErrUnknownBundleFormat = fmt.Errorf("unknown bundle format")
+var ErrUnknownBundleFormat = errors.New("unknown bundle format")
 
 // ErrNoKubernetesResources is returned when a bundle has no k8s API data to serve.
 var ErrNoKubernetesResources = errors.New(
