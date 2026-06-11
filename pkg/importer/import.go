@@ -84,7 +84,7 @@ func importNamespaces(
 	ctx context.Context,
 	cfg *importerConfig,
 ) error {
-	namespacesPath := filepath.Join(cfg.bundle.Layout().ClusterResources(), "namespaces.json")
+	namespacesPath := filepath.Join(cfg.bundle.Layout().ClusterResources(), cfg.bundle.Layout().NamespacesFile())
 	list, err := bundle.LoadResourcesFromFile(cfg.bundle, namespacesPath)
 	if err != nil {
 		cli.WarnOnErrorsFilePresence(cfg.bundle, cfg.out, namespacesPath)
