@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/yaml"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/mhrabovcin/troubleshoot-live/pkg/utils"
 )
@@ -23,8 +23,6 @@ import (
 // GVK information. It is up to caller to add GVK to each item before further
 // processing.
 func LoadResourcesFromFile(bundle afero.Fs, path string) (*unstructured.UnstructuredList, error) {
-	list := &unstructured.UnstructuredList{}
-
 	data, err := afero.ReadFile(bundle, path)
 	if err != nil {
 		return nil, err
@@ -35,12 +33,11 @@ func LoadResourcesFromFile(bundle afero.Fs, path string) (*unstructured.Unstruct
 	}
 
 	if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
-		items := []unstructured.Unstructured{}
-		if err := yaml.Unmarshal(data, &items); err != nil {
-			return nil, err
+		jsonData, err := sigsyaml.YAMLToJSON(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert YAML to JSON for %q: %w", path, err)
 		}
-		list.Items = items
-		return list, nil
+		return parseJSONList(jsonData, path)
 	}
 
 	return nil, fmt.Errorf("unsupported data format")
