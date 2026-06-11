@@ -50,8 +50,12 @@ func ImportBundle(ctx context.Context, b bundle.Bundle, restCfg *rest.Config, ou
 		importCRDs,
 		importNamespaces,
 		importClusterResources,
-		importCMs,
-		importSecrets,
+	}
+	// Spectro bundles store configmaps/secrets as normal k8s List objects under
+	// cluster-resources, so the generic walk imports them. Native troubleshoot.sh
+	// bundles use a special struct in dedicated dirs, handled here.
+	if !b.Layout().Spectro() {
+		importers = append(importers, importCMs, importSecrets)
 	}
 
 	var importErrors []error
@@ -115,22 +119,8 @@ func importClusterResources(
 	ctx context.Context,
 	cfg *importerConfig,
 ) error {
-	skipResources := []string{
-		// crds are imported during a separate step
-		"custom-resource-definitions.json",
-		"pod-disruption-budgets-info.json",
-		// api-resources from the discovery client
-		"resources.json",
-		// api-groups from the discovery client
-		"groups.json",
-		// namespaces are imported as first resource in a separate step
-		"namespaces.json",
-	}
-
-	skipDirs := []string{
-		"auth-cani-list",
-		"pod-disruption-budgets",
-	}
+	skipResources := cfg.bundle.Layout().SkipResources()
+	skipDirs := cfg.bundle.Layout().SkipDirs()
 
 	return afero.Walk(cfg.bundle, cfg.bundle.Layout().ClusterResources(), func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
