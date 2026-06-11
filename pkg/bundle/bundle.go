@@ -16,6 +16,10 @@ import (
 // ErrUnknownBundleFormat is returned when bundle cannot be loaded.
 var ErrUnknownBundleFormat = fmt.Errorf("unknown bundle format")
 
+// ErrNoKubernetesResources is returned when a bundle has no k8s API data to serve.
+var ErrNoKubernetesResources = fmt.Errorf(
+	"bundle contains no Kubernetes resources; nothing to serve")
+
 // Bundle is representing support bundle data.
 type Bundle interface {
 	afero.Fs
@@ -25,10 +29,11 @@ type Bundle interface {
 
 type bundle struct {
 	afero.Fs
+	layout Layout
 }
 
-func (bundle) Layout() Layout {
-	return defaultLayout{}
+func (b bundle) Layout() Layout {
+	return b.layout
 }
 
 // New creates bundle representation from given path. It supports reading extracted
@@ -79,7 +84,12 @@ func New(path string) (Bundle, error) {
 			return nil, fmt.Errorf("more than 1 directory in archive, cannot infer bundle directory")
 		}
 
-		return FromFs(fromDir(filepath.Join(tmpDir, entries[0].Name()))), nil
+		fs := fromDir(filepath.Join(tmpDir, entries[0].Name()))
+		layout, err := detectLayout(fs)
+		if err != nil {
+			return nil, err
+		}
+		return bundle{Fs: fs, layout: layout}, nil
 	default:
 		absPath, err := filepath.Abs(path)
 		if err != nil {
@@ -95,15 +105,39 @@ func New(path string) (Bundle, error) {
 			break
 		}
 
-		return FromFs(fromDir(absPath)), nil
+		fs := fromDir(absPath)
+		layout, err := detectLayout(fs)
+		if err != nil {
+			return nil, err
+		}
+		return bundle{Fs: fs, layout: layout}, nil
 	}
 
 	return nil, ErrUnknownBundleFormat
 }
 
-// FromFs allows to create bundle form provided afero.Fs.
+// FromFs allows to create bundle from provided afero.Fs. The layout is
+// auto-detected; when no cluster-resources directory is found it falls back to
+// the native layout (useful for synthetic/in-memory filesystems in tests).
 func FromFs(fs afero.Fs) Bundle {
-	return bundle{fs}
+	layout, err := detectLayout(fs)
+	if err != nil {
+		layout = defaultLayout{}
+	}
+	return bundle{Fs: fs, layout: layout}
+}
+
+// detectLayout picks the Spectro layout when the k8s/ prefixed cluster-resources
+// directory is present, otherwise the native troubleshoot.sh layout. It returns
+// ErrNoKubernetesResources when neither cluster-resources directory exists.
+func detectLayout(fs afero.Fs) (Layout, error) {
+	if ok, _ := afero.DirExists(fs, spectroLayout{}.ClusterResources()); ok {
+		return spectroLayout{}, nil
+	}
+	if ok, _ := afero.DirExists(fs, defaultLayout{}.ClusterResources()); ok {
+		return defaultLayout{}, nil
+	}
+	return nil, ErrNoKubernetesResources
 }
 
 func unarchiveToDirectory(ctx context.Context, archive, destDir string) error {
