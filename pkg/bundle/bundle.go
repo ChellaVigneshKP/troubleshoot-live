@@ -163,6 +163,13 @@ func unarchiveToDirectory(ctx context.Context, archive, destDir string) error {
 
 	if ex, ok := format.(archives.Extractor); ok {
 		return ex.Extract(ctx, reader, func(_ context.Context, info archives.FileInfo) error {
+			// Directory entries: create the directory and skip file creation.
+			// Without this, a directory entry would be written as an empty
+			// regular file (e.g. cluster-resources/deployments/deployments).
+			if info.IsDir() {
+				return os.MkdirAll(filepath.Join(destDir, info.NameInArchive), 0o755)
+			}
+
 			baseDir := filepath.Dir(info.NameInArchive)
 			if err := os.MkdirAll(filepath.Join(destDir, baseDir), 0o755); err != nil {
 				return err
