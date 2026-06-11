@@ -855,6 +855,27 @@ git commit -m "docs: document Spectro bundle auto-detection and --kubernetes-ver
 
 ---
 
+## Task 9: Fix spurious files from directory archive entries (found during E2E)
+
+**Files:** Modify `pkg/bundle/bundle.go` (`unarchiveToDirectory`).
+
+Discovered during Task 8 E2E: the archive extractor created a 0-byte file for
+every directory entry in the tar (e.g. `cluster-resources/deployments/deployments`),
+which then failed to load with `unsupported data format`. Fix: skip directory
+entries, creating the directory instead.
+
+- [x] Add, as the first statement of the `ex.Extract` callback:
+```go
+			if info.IsDir() {
+				return os.MkdirAll(filepath.Join(destDir, info.NameInArchive), 0o755)
+			}
+```
+- [x] `go build ./... && go vet ./pkg/bundle/...` clean.
+- [x] Commit: `fix(bundle): skip directory entries when extracting archives`
+
+Note: the extractor caches extractions under `$TMPDIR/troubleshoot-live/<name>_<size>`.
+To re-verify, clear that cache so the bundle re-extracts.
+
 ## Self-Review notes (spec coverage)
 
 - Spec §1 layout detection → Task 1. §2 List parsing → Task 2. §3 version detection
