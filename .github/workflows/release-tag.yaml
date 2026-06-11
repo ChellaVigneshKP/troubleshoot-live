@@ -31,7 +31,14 @@ jobs:
           username: ${{ github.actor  }}
           password: ${{ secrets.GITHUB_TOKEN  }}
 
+      - name: Set ghcr image namespace (lowercased owner)
+        run: echo "DOCKERHUB_ORG=${OWNER,,}" >> "$GITHUB_ENV"
+        env:
+          OWNER: ${{ github.repository_owner }}
+
       - name: Release
         run: devbox run -- make release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_REGISTRY: ghcr.io
+          GIT_TREE_STATE: clean
