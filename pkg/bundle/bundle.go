@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,7 +18,7 @@ import (
 var ErrUnknownBundleFormat = fmt.Errorf("unknown bundle format")
 
 // ErrNoKubernetesResources is returned when a bundle has no k8s API data to serve.
-var ErrNoKubernetesResources = fmt.Errorf(
+var ErrNoKubernetesResources = errors.New(
 	"bundle contains no Kubernetes resources; nothing to serve")
 
 // Bundle is representing support bundle data.
@@ -131,10 +132,18 @@ func FromFs(fs afero.Fs) Bundle {
 // directory is present, otherwise the native troubleshoot.sh layout. It returns
 // ErrNoKubernetesResources when neither cluster-resources directory exists.
 func detectLayout(fs afero.Fs) (Layout, error) {
-	if ok, _ := afero.DirExists(fs, spectroLayout{}.ClusterResources()); ok {
+	ok, err := afero.DirExists(fs, spectroLayout{}.ClusterResources())
+	if err != nil {
+		return nil, fmt.Errorf("probing spectro layout: %w", err)
+	}
+	if ok {
 		return spectroLayout{}, nil
 	}
-	if ok, _ := afero.DirExists(fs, defaultLayout{}.ClusterResources()); ok {
+	ok, err = afero.DirExists(fs, defaultLayout{}.ClusterResources())
+	if err != nil {
+		return nil, fmt.Errorf("probing default layout: %w", err)
+	}
+	if ok {
 		return defaultLayout{}, nil
 	}
 	return nil, ErrNoKubernetesResources

@@ -38,7 +38,7 @@ func (defaultLayout) Secrets() string            { return "secrets" }
 func (defaultLayout) ClusterVersionFile() string { return "cluster_version.json" }
 func (defaultLayout) CRDsFile() string           { return "custom-resource-definitions.json" }
 func (defaultLayout) NamespacesFile() string     { return "namespaces.json" }
-func (defaultLayout) Spectro() bool               { return false }
+func (defaultLayout) Spectro() bool              { return false }
 
 func (defaultLayout) SkipResources() []string {
 	return []string{
@@ -74,7 +74,7 @@ func (spectroLayout) Secrets() string            { return "k8s/cluster-resources
 func (spectroLayout) ClusterVersionFile() string { return "cluster-version.yaml" }
 func (spectroLayout) CRDsFile() string           { return "crds.yaml" }
 func (spectroLayout) NamespacesFile() string     { return "namespaces.yaml" }
-func (spectroLayout) Spectro() bool               { return true }
+func (spectroLayout) Spectro() bool              { return true }
 
 func (spectroLayout) SkipResources() []string {
 	return []string{
