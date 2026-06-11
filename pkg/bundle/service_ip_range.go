@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/afero"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -50,10 +52,24 @@ func DetectServiceNodePortRange(b Bundle) (string, error) {
 }
 
 func findKubeApiserverPod(b Bundle) (*corev1.Pod, error) {
-	path := filepath.Join(b.Layout().ClusterResources(), "pods", "kube-system.json")
-	list, err := LoadResourcesFromFile(b, path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load pods from file %q: %w", path, err)
+	var list *unstructured.UnstructuredList
+	var lastErr error
+	for _, name := range []string{"kube-system.yaml", "kube-system.json"} {
+		path := filepath.Join(b.Layout().ClusterResources(), "pods", name)
+		if exists, _ := afero.Exists(b, path); !exists {
+			continue
+		}
+		l, err := LoadResourcesFromFile(b, path)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to load pods from file %q: %w", path, err)
+			continue
+		}
+		list = l
+		break
+	}
+	if list == nil {
+		// No kube-system pods file (e.g. managed providers); not fatal.
+		return nil, lastErr
 	}
 
 	for i := range list.Items {

@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -22,14 +25,38 @@ func LogsHandler(b bundle.Bundle, l *slog.Logger) http.HandlerFunc {
 
 		podLogsPath := ""
 
-		// Search for pod logs path in the bundle which could be collected either by the
-		// pod logs collector or by the cluster resources collector, which collects pod logs
-		// for failing pods.
-		filename := fmt.Sprintf("%s-%s.log", vars["pod"], r.URL.Query().Get("container"))
-		candidatePaths := []string{
-			filepath.Join(b.Layout().PodLogs(), vars["namespace"], filename),
-			filepath.Join(b.Layout().ClusterResources(), "pods/logs", vars["namespace"], vars["pod"], r.URL.Query().Get("container")+".log"),
+		namespace := vars["namespace"]
+		pod := vars["pod"]
+		container := r.URL.Query().Get("container")
+		previous := r.URL.Query().Get("previous") == "true"
+
+		candidatePaths := []string{}
+
+		if previous {
+			// Spectro previous logs.
+			if p := findVarLogPodFile(b, b.Layout().PodLogs(), namespace, pod, container, true); p != "" {
+				candidatePaths = append(candidatePaths, p)
+			}
+			candidatePaths = append(candidatePaths,
+				filepath.Join(b.Layout().PreviousPodLogs(), namespace, pod, "previous.log"),
+			)
+		} else {
+			// Native troubleshoot.sh paths.
+			filename := fmt.Sprintf("%s-%s.log", pod, container)
+			candidatePaths = append(candidatePaths,
+				filepath.Join(b.Layout().PodLogs(), namespace, filename),
+				filepath.Join(b.Layout().ClusterResources(), "pods/logs", namespace, pod, container+".log"),
+			)
+			// Spectro infra: kubectl cluster-info dump.
+			candidatePaths = append(candidatePaths,
+				filepath.Join(b.Layout().ClusterInfo(), "dump", namespace, pod, "logs.txt"),
+			)
+			// Spectro edge: /var/log/pods copy.
+			if p := findVarLogPodFile(b, b.Layout().PodLogs(), namespace, pod, container, false); p != "" {
+				candidatePaths = append(candidatePaths, p)
+			}
 		}
+
 		for _, candidatePath := range candidatePaths {
 			if exists, _ := afero.Exists(b, candidatePath); exists {
 				podLogsPath = candidatePath
@@ -74,4 +101,52 @@ func LogsHandler(b bundle.Bundle, l *slog.Logger) http.HandlerFunc {
 			slog.Error("failed to write response data", "err", err)
 		}
 	}
+}
+
+// findVarLogPodFile locates a log file inside a /var/log/pods style layout:
+//
+//	<podLogsRoot>/<namespace>_<pod>_<uid>/<container>/<restartCount>.log
+//
+// It returns the highest restartCount file (or the second-highest when previous
+// is true). Returns "" when nothing matches.
+func findVarLogPodFile(b afero.Fs, podLogsRoot, namespace, pod, container string, previous bool) string {
+	entries, err := afero.ReadDir(b, podLogsRoot)
+	if err != nil {
+		return ""
+	}
+	prefix := fmt.Sprintf("%s_%s_", namespace, pod)
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		containerDir := filepath.Join(podLogsRoot, e.Name(), container)
+		logFiles, err := afero.ReadDir(b, containerDir)
+		if err != nil {
+			continue
+		}
+		counts := []int{}
+		for _, lf := range logFiles {
+			if !strings.HasSuffix(lf.Name(), ".log") {
+				continue
+			}
+			n, err := strconv.Atoi(strings.TrimSuffix(lf.Name(), ".log"))
+			if err != nil {
+				continue
+			}
+			counts = append(counts, n)
+		}
+		if len(counts) == 0 {
+			continue
+		}
+		sort.Sort(sort.Reverse(sort.IntSlice(counts)))
+		idx := 0
+		if previous {
+			idx = 1
+		}
+		if idx >= len(counts) {
+			return ""
+		}
+		return filepath.Join(containerDir, fmt.Sprintf("%d.log", counts[idx]))
+	}
+	return ""
 }

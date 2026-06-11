@@ -91,6 +91,25 @@ NAMESPACE     NAME                                       READY   STATUS    RESTA
 default   my-pod-66bff467f8-2j2xv                   1/1     Running   0          2m
 ```
 
+## Spectro Cloud support bundles
+
+`troubleshoot-live` auto-detects Spectro Cloud sustaining-team support bundles
+(produced by `support-tools/support-bundle-infra.sh` and
+`support-tools/support-bundle-edge.sh`) by the presence of a
+`k8s/cluster-resources/` directory and adapts automatically — no configuration
+required. Native `troubleshoot.sh` bundles continue to work unchanged.
+
+If the bundle's Kubernetes version cannot be detected, or the matching envtest
+binaries are unavailable, set it explicitly:
+
+```bash
+troubleshoot-live serve support-bundle.tar.gz --kubernetes-version 1.31
+```
+
+Edge bundles collected from a host without Kubernetes (no `k8s/` directory) have
+no API resources to serve and will report:
+`bundle contains no Kubernetes resources; nothing to serve`.
+
 ## Development
 
 Use [Devbox](https://www.jetify.com/devbox) for local development.
